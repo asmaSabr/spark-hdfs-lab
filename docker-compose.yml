@@ -1,0 +1,113 @@
+version: '3.8'
+
+networks:
+  spark-hdfs-net:
+    driver: bridge
+
+services:
+
+  # ─────────────────────────────
+  # HDFS — NameNode
+  # ─────────────────────────────
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=spark-hdfs-lab
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    ports:
+      - "9870:9870"    # HDFS Web UI → http://localhost:9870
+      - "9000:9000"    # Port RPC HDFS
+    volumes:
+      - namenode-data:/hadoop/dfs/name
+    networks:
+      - spark-hdfs-net
+
+  # ─────────────────────────────
+  # HDFS — DataNode 1
+  # ─────────────────────────────
+  datanode1:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode1
+    hostname: datanode1
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    depends_on:
+      - namenode
+    volumes:
+      - datanode1-data:/hadoop/dfs/data
+    networks:
+      - spark-hdfs-net
+
+  # ─────────────────────────────
+  # HDFS — DataNode 2
+  # ─────────────────────────────
+  datanode2:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode2
+    hostname: datanode2
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    depends_on:
+      - namenode
+    volumes:
+      - datanode2-data:/hadoop/dfs/data
+    networks:
+      - spark-hdfs-net
+
+  # ─────────────────────────────
+  # SPARK — Master
+  # ─────────────────────────────
+  spark-master:
+    image: bde2020/spark-master:3.3.0-hadoop3.3
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    ports:
+      - "8080:8080"    # Spark Web UI → http://localhost:8080
+      - "7077:7077"    # Port Spark Master
+    networks:
+      - spark-hdfs-net
+
+  # ─────────────────────────────
+  # SPARK — Worker
+  # ─────────────────────────────
+  spark-worker1:
+    image: bde2020/spark-worker:3.3.0-hadoop3.3
+    container_name: spark-worker1
+    hostname: spark-worker1
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"    # Spark Worker UI → http://localhost:8081
+    networks:
+      - spark-hdfs-net
+
+  # ─────────────────────────────
+  # SPARK — Client (pour soumettre les jobs)
+  # ─────────────────────────────
+  spark-client:
+    image: bde2020/spark-submit:3.3.0-hadoop3.3
+    container_name: spark-client
+    hostname: spark-client
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    depends_on:
+      - spark-master
+      - namenode
+    volumes:
+      - ./app:/opt/spark/app    # ton dossier app.py sera ici
+    networks:
+      - spark-hdfs-net
+    command: tail -f /dev/null  # garder le conteneur vivant
+
+volumes:
+  namenode-data:
+  datanode1-data:
+  datanode2-data:
